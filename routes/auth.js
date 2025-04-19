@@ -143,7 +143,10 @@ router.post('/login', async (req, res) => {
         const payload = {
             user: {
                 id: user.id,
-                role: user.role
+                role: user.role,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
             },
         };
 
@@ -159,5 +162,69 @@ router.post('/login', async (req, res) => {
     }
 });
 
+// Route to change password
+router.patch("/auth/change-password", auth, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        // Validate request body
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                error: "Both current password and new password are required"
+            });
+        }
+
+        // Password validation
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                error: "New password must be at least 6 characters long"
+            });
+        }
+
+        // Get user from database
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Verify current password
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ error: "Current password is incorrect" });
+        }
+
+        // Check if new password is different from current
+        if (currentPassword === newPassword) {
+            return res.status(400).json({
+                error: "New password must be different from current password"
+            });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        user.password = await bcrypt.hash(newPassword, salt);
+
+        // Save updated user
+        await user.save();
+
+        res.json({
+            message: "Password updated successfully",
+            timestamp: new Date(),
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error("Error changing password:", error);
+        res.status(500).json({
+            error: "Server error",
+            details: error.message
+        });
+    }
+});
 
 module.exports = router;

@@ -9,7 +9,11 @@ const userSchema = new Schema({
     blocked: { type: Boolean, default: false },
     phone: { type: String},
     createdAt: { type: Date, default: Date.now},
-    email: { type: String, required: true },
+    email: { type: String },
+    idNumber: { type: String},
+    address: { type: String},
+    age: { type: Number },
+    commissionPercentage: { type: Number },
     resetPasswordToken: String,
     resetPasswordExpires: Date,
 });

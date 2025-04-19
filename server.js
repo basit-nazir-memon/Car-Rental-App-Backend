@@ -3,6 +3,14 @@ const mongoose = require('mongoose')
 
 const authRoute = require('./routes/auth');
 const carsRoute = require('./routes/cars');
+const employeesRoute = require('./routes/employees');
+const driversRoute = require("./routes/drivers")
+const customersRoute = require('./routes/customers');
+const bookingsRoute = require('./routes/bookings');
+const expensesRoute = require('./routes/expenses');
+const reportsRoute = require('./routes/reports');
+const dashboardRoute = require('./routes/dashboard');
+const stakeholdersRoute = require('./routes/stakeholders');
 
 const cors = require('cors');
 require('dotenv').config()
@@ -25,6 +33,22 @@ app.use(cors());
 app.use('/', authRoute);
 
 app.use('/cars', carsRoute);
+
+app.use('/employees', employeesRoute);
+
+app.use('/drivers', driversRoute);
+
+app.use('/customers', customersRoute);
+
+app.use('/bookings', bookingsRoute);
+
+app.use('/expenses', expensesRoute);
+
+app.use('/reports', reportsRoute);
+
+app.use('/dashboard', dashboardRoute);
+
+app.use('/stakeholders', stakeholdersRoute);
 
 app.get('/status', (req, res)=> {
     res.status(200).json({
