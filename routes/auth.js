@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const streamifier = require("streamifier");
+const Car = require('../models/Car');
 require('dotenv').config();
 
 cloudinary.config({
@@ -46,6 +47,23 @@ async function uploadFile(req) {
 router.post('/upload-image', auth, upload.single('image'), async (req, res) => {
     try {
         const result = await uploadFile(req);
+        res.status(200).json({ image_url: result.secure_url });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ error: 'An error occurred while uploading the image' });
+    }
+});
+
+// Upload Image Route
+router.post('/cars/upload-image/:id', auth, upload.single('image'), async (req, res) => {
+    try {
+        const result = await uploadFile(req);
+        const car = await Car.findById(req.params.id);
+        if (!car) {
+            return res.status(404).json({ error: "Car not found" });
+        }
+        car.image = result.secure_url;
+        await car.save();
         res.status(200).json({ image_url: result.secure_url });
     } catch (err) {
         console.log(err);

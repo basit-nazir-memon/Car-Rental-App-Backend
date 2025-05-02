@@ -1,6 +1,7 @@
 const express = require("express");
 const Car = require("../models/Car");
 const auth = require("../middleware/auth");
+const admin = require("../middleware/admin");
 const router = express.Router();
 const Booking = require("../models/Booking");
 const User = require("../models/User");
@@ -135,7 +136,7 @@ router.get("/", auth, async (req, res) => {
         }
 
         // Get all cars
-        const cars = await Car.find().populate('user', 'name commissionPercentage');
+        const cars = await Car.find( { deleted: false } ).populate('user', 'name commissionPercentage');
 
         // Get all completed bookings for statistics
         const completedBookings = await Booking.find({
@@ -273,7 +274,7 @@ router.get("/:modelName", auth, async (req, res) => {
         }
 
         // Get cars of the specified model
-        const cars = await Car.find({ model: modelName })
+        const cars = await Car.find({ model: modelName, deleted: false })
             .populate('user', 'name commissionPercentage');
 
         if (cars.length === 0) {
@@ -306,6 +307,7 @@ router.get("/:modelName", auth, async (req, res) => {
                 engineNumber: car.engineNumber,
                 year: car.year,
                 available: isAvailable,
+                image: car.image,
                 owner: car.user?.name || 'N/A',
                 stats: {
                     totalBookings: carBookings.length,
@@ -519,6 +521,46 @@ router.get("/detailed/info/:id", auth, async (req, res) => {
     } catch (error) {
         console.error("Error fetching car details:", error);
         res.status(500).json({ error: "Failed to fetch car details" });
+    }
+});
+
+// Delete (deactivate) a car
+router.delete("/:carId", auth, admin, async (req, res) => {
+    try {
+        const carId = req.params.carId;
+
+        // Find the car
+        const car = await Car.findById(carId);
+        if (!car) {
+            return res.status(404).json({ error: "Car not found" });
+        }
+
+        // Check for active or pending bookings
+        const activeBooking = await Booking.findOne({
+            carId: car._id,
+            status: { $in: ['active', 'pending'] }
+        });
+
+        if (activeBooking) {
+            return res.status(400).json({ error: "Car cannot be deleted because it is currently booked." });
+        }
+
+        // Mark the car as unavailable
+        car.deleted = true;
+        await car.save();
+
+        res.json({
+            message: "Car marked as unavailable successfully.",
+            car: {
+                id: car._id,
+                model: car.model,
+                registrationNumber: car.registrationNumber,
+                deleted: car.deleted
+            }
+        });
+    } catch (error) {
+        console.error("Error deleting car:", error);
+        res.status(500).json({ error: "Failed to delete car" });
     }
 });
 
