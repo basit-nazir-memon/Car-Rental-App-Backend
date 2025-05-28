@@ -26,6 +26,7 @@ const ExpenseSchema = new Schema(
             type: String, 
             required: true,
             enum: [
+                'Car',
                 'Maintenance',
                 'Rent',
                 'Fuel',
@@ -35,6 +36,14 @@ const ExpenseSchema = new Schema(
                 'Marketing',
                 'Other'
             ]
+        },
+        office: { 
+            type: String, 
+            trim: true
+        },
+        carId: { 
+            type: mongoose.Schema.Types.ObjectId, 
+            ref: "Car"
         },
         addedBy: {
             type: mongoose.Schema.Types.ObjectId,

@@ -86,6 +86,8 @@ router.get("/", auth, async (req, res) => {
                 date: expense.date,
                 category: expense.category,
                 addedBy: expense.addedBy.name,
+                office: expense.office,
+                carId: expense.carId,
                 createdAt: expense.createdAt
             })),
             summary
@@ -100,7 +102,7 @@ router.get("/", auth, async (req, res) => {
 // Add new expense
 router.post("/", auth, async (req, res) => {
     try {
-        const { title, description, amount, date, category } = req.body;
+        const { title, description, amount, date, category, office, carId } = req.body;
 
         // Validate required fields
         if (!title || !amount || !category) {
@@ -109,6 +111,7 @@ router.post("/", auth, async (req, res) => {
 
         // Validate category
         const validCategories = [
+            'Car',
             'Maintenance',
             'Rent',
             'Fuel',
@@ -130,6 +133,8 @@ router.post("/", auth, async (req, res) => {
             amount: Number(amount),
             date: date ? new Date(date) : new Date(),
             category,
+            office,
+            carId: carId !== "" ? carId : undefined,
             addedBy: req.user.id
         });
 

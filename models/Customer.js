@@ -8,6 +8,11 @@ const CustomerSchema = new Schema(
             required: true,
             trim: true
         },
+        careOf: { 
+            type: String,
+            required: true,
+            trim: true
+        },
         email: { 
             type: String,
             match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Please enter a valid email address']

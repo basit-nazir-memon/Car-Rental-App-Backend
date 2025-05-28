@@ -12,6 +12,7 @@ const CarSchema = new Schema(
         image: { type: String },
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
         deleted: { type: Boolean, default: false },
+        variant: { type: String},
     },
     { timestamps: true }
 );

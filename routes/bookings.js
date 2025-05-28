@@ -23,13 +23,19 @@ router.post("/", auth, async (req, res) => {
             discountReference,
             customerName,
             cellNumber,
-            idCardNumber
+            careOf,
+            idCardNumber,
+            tripStartTime,
+            tripDescription,
+            driverPreference,
+            customerLicenseNumber
         } = req.body;
 
         // Validate required fields
-        if (!carId || !driverId || !tripType || !startDate || !endDate || 
+        if (!carId || !tripType || !startDate || !endDate || 
             !meterReading || !totalBill || !advancePaid || 
-            !customerName || !cellNumber || !idCardNumber) {
+            !customerName || !cellNumber || !idCardNumber ||
+            !tripStartTime || !driverPreference) {
             return res.status(400).json({ error: "All required fields must be provided" });
         }
 
@@ -39,15 +45,15 @@ router.post("/", auth, async (req, res) => {
             return res.status(404).json({ error: "Car not found" });
         }
 
-        // Validate if driver exists
-        const driver = await Driver.findById(driverId);
-        if (!driver) {
-            return res.status(404).json({ error: "Driver not found" });
-        }
-
-        // Check if driver is available
-        if (!driver.available) {
-            return res.status(400).json({ error: "Selected driver is not available" });
+        // Validate driver if driver preference is 'driver'
+        if (driverPreference === 'driver') {
+            if (!driverId) {
+                return res.status(400).json({ error: "Driver ID is required when driver preference is 'driver'" });
+            }
+            const driver = await Driver.findById(driverId);
+            if (!driver) {
+                return res.status(404).json({ error: "Driver not found" });
+            }
         }
 
         // Check if the car is available for the selected dates
@@ -75,20 +81,22 @@ router.post("/", auth, async (req, res) => {
         });
 
         if (!customer) {
-            // Create new customer if doesn't exist
             customer = new Customer({
                 fullName: customerName,
                 phoneNumber: cellNumber,
+                careOf: careOf,
                 idCardNumber,
                 bookingCount: 1,
                 lastBookingDate: new Date()
             });
         } else {
-            // Update existing customer's booking info
             customer.bookingCount += 1;
             customer.lastBookingDate = new Date();
             if (customer.fullName !== customerName) {
-                customer.fullName = customerName; // Update name if changed
+                customer.fullName = customerName;
+            }
+            if (customer.careOf != careOf){
+                customer.careOf = careOf;
             }
         }
 
@@ -97,8 +105,8 @@ router.post("/", auth, async (req, res) => {
         // Create new booking
         const newBooking = new Booking({
             carId,
-            driverId,
-            tripType: tripType === "out-of-city" ? "outofcity" : "withincity", // Normalize tripType
+            driverId: driverPreference === 'driver' ? driverId : undefined,
+            tripType: tripType === "out-of-city" ? "outofcity" : "withincity",
             cityName: tripType === "out-of-city" ? cityName : undefined,
             startDate: new Date(startDate),
             endDate: new Date(endDate),
@@ -110,15 +118,21 @@ router.post("/", auth, async (req, res) => {
             customerId: customer._id,
             bookedBy: req.user.id,
             status: 'active',
-            customerId: customer._id  // Add reference to customer
+            tripStartTime,
+            tripDescription,
+            driverPreference,
+            customerLicenseNumber: driverPreference === 'self' ? customerLicenseNumber : undefined
         });
 
         // Save the booking
         await newBooking.save();
 
-        // Update driver availability
-        driver.available = false;
-        await driver.save();
+        // Update driver availability if driver is assigned
+        if (driverPreference === 'driver') {
+            await Driver.findByIdAndUpdate(driverId, { 
+                available: false 
+            });
+        }
 
         // Return the created booking
         res.status(201).json({
@@ -135,6 +149,10 @@ router.post("/", auth, async (req, res) => {
                 cellNumber: newBooking.customerCellPhone,
                 idCardNumber: newBooking.idCardNumber,
                 status: newBooking.status,
+                tripStartTime: newBooking.tripStartTime,
+                tripDescription: newBooking.tripDescription,
+                driverPreference: newBooking.driverPreference,
+                customerLicenseNumber: newBooking.customerLicenseNumber,
                 customer: {
                     id: customer._id,
                     fullName: customer.fullName,
@@ -158,7 +176,6 @@ router.post("/", auth, async (req, res) => {
 // Get all bookings with populated data
 router.get("/", auth, async (req, res) => {
     try {
-        // Find all bookings and populate related data
         const bookings = await Booking.find()
             .populate({
                 path: 'carId',
@@ -172,9 +189,8 @@ router.get("/", auth, async (req, res) => {
                 path: 'customerId',
                 select: 'fullName idCardNumber'
             })
-            .sort({ createdAt: -1 }); // Most recent bookings first
+            .sort({ createdAt: -1 });
 
-        // Format the response
         const formattedBookings = bookings.map(booking => ({
             id: booking._id,
             carModel: booking.carId.model,
@@ -182,19 +198,21 @@ router.get("/", auth, async (req, res) => {
             registrationNumber: booking.carId.registrationNumber,
             customerName: booking.customerId.fullName,
             customerIdCard: booking.customerId.idCardNumber,
-            driverName: booking.driverId.name,
+            driverName: booking.driverId?.name || 'Self Drive',
             startDate: booking.startDate,
             endDate: booking.endDate,
             status: booking.status,
-            // Additional useful information
             tripType: booking.tripType,
             cityName: booking.cityName,
             totalBill: booking.totalBill,
             advancePaid: booking.advancePaid,
             remainingAmount: booking.totalBill - booking.advancePaid,
+            discountPercentage: booking.discountPercentage,
             meterReading: booking.meterReading,
-            startTime: booking.startTime,
-            endTime: booking.endTime || null
+            tripStartTime: booking.tripStartTime,
+            tripDescription: booking.tripDescription,
+            driverPreference: booking.driverPreference,
+            customerLicenseNumber: booking.customerLicenseNumber
         }));
 
         // Add filters if provided in query params
@@ -202,14 +220,12 @@ router.get("/", auth, async (req, res) => {
 
         let filteredBookings = formattedBookings;
 
-        // Filter by status if provided
         if (status) {
             filteredBookings = filteredBookings.filter(booking => 
                 booking.status.toLowerCase() === status.toLowerCase()
             );
         }
 
-        // Filter by date range if provided
         if (startDate && endDate) {
             const start = new Date(startDate);
             const end = new Date(endDate);
@@ -295,7 +311,7 @@ router.get("/:bookingId/details", auth, async (req, res) => {
         const booking = await Booking.findById(bookingId)
             .populate({
                 path: 'carId',
-                select: 'model year color registrationNumber chassisNumber engineNumber image'
+                select: 'model year color registrationNumber chassisNumber engineNumber image variant'
             })
             .populate({
                 path: 'driverId',
@@ -335,12 +351,13 @@ router.get("/:bookingId/details", auth, async (req, res) => {
                 engineNumber: booking.carId.engineNumber,
                 image: booking.carId.image || "/placeholder.svg?height=200&width=300",
                 meterReading: booking.meterReading,
+                variant: booking.carId.variant
             },
             driver: {
-                name: booking.driverId.name,
-                phone: booking.driverId.phone,
-                idCard: booking.driverId.idNumber,
-                image: booking.driverId.avatar || "/placeholder.svg?height=100&width=100",
+                name: booking?.driverId?.name || null,
+                phone: booking?.driverId?.phone || null,
+                idCard: booking?.driverId?.idNumber || null,
+                image: booking?.driverId?.avatar || "/placeholder.svg?height=100&width=100",
             },
             trip: {
                 type: booking.tripType === 'withincity' ? 'within-city' : 'out-of-city',
@@ -348,8 +365,9 @@ router.get("/:bookingId/details", auth, async (req, res) => {
                 startDate: booking.startDate,
                 endDate: booking.endDate,
                 actualEndDate: booking.status === 'completed' ? booking.updatedAt : null,
-                startTime: booking.startTime || "12:00",
-                endTime: booking.endTime || null
+                tripStartTime: booking.tripStartTime || "12:00",
+                endTime: booking.endTime || null,
+                description: booking.description,
             },
             billing: {
                 totalAmount: booking.totalBill,
@@ -362,6 +380,8 @@ router.get("/:bookingId/details", auth, async (req, res) => {
             },
             createdAt: booking.createdAt,
             createdBy: booking.bookedBy.name,
+            driverPreference: booking.driverPreference,
+            customerLicenseNumber: booking.customerLicenseNumber,
             // Additional useful information
             updatedAt: booking.updatedAt,
             lastModifiedBy: booking.bookedBy.name // You might want to add a separate field for last modified by
@@ -469,6 +489,11 @@ router.patch("/:bookingId", auth, async (req, res) => {
             advancePaid,
             discountPercentage,
             discountReference,
+            tripStartTime,
+            tripDescription,
+            driverPreference,
+            driverId,
+            customerLicenseNumber
         } = req.body;
 
         // Find booking
@@ -483,6 +508,21 @@ router.patch("/:bookingId", auth, async (req, res) => {
                 error: "Only active bookings can be edited" 
             });
         }
+
+        // Validate driver if changing to driver preference
+        if (driverPreference === 'driver' && !driverId) {
+            return res.status(400).json({ 
+                error: "Driver ID is required when driver preference is 'driver'" 
+            });
+        }
+
+        // Validate license number if changing to self-driving
+        if (driverPreference === 'self' && !customerLicenseNumber) {
+            return res.status(400).json({ 
+                error: "License number is required when driver preference is 'self'" 
+            });
+        }
+
         // Update booking
         const updatedBooking = await Booking.findByIdAndUpdate(
             bookingId,
@@ -495,12 +535,18 @@ router.patch("/:bookingId", auth, async (req, res) => {
                 totalBill: totalBill || booking.totalBill,
                 advancePaid: advancePaid || booking.advancePaid,
                 discountPercentage: discountPercentage || booking.discountPercentage,
-                discountReference: discountReference || booking.discountReference
+                discountReference: discountReference || booking.discountReference,
+                tripStartTime: tripStartTime || booking.tripStartTime,
+                tripDescription: tripDescription || booking.tripDescription,
+                driverPreference: driverPreference || booking.driverPreference,
+                driverId: driverPreference === 'driver' ? driverId : undefined,
+                customerLicenseNumber: driverPreference === 'self' ? customerLicenseNumber : undefined
             },
             { new: true }
         ).populate([
             { path: 'carId', select: 'model year color registrationNumber' },
-            { path: 'customerId', select: 'fullName phoneNumber idCardNumber' }
+            { path: 'customerId', select: 'fullName phoneNumber idCardNumber' },
+            { path: 'driverId', select: 'name' }
         ]);
 
         // Format and return updated booking
@@ -526,6 +572,13 @@ router.patch("/:bookingId", auth, async (req, res) => {
                 city: updatedBooking.cityName || "",
                 startDate: updatedBooking.startDate,
                 endDate: updatedBooking.endDate,
+                startTime: updatedBooking.tripStartTime,
+                description: updatedBooking.tripDescription
+            },
+            driver: {
+                preference: updatedBooking.driverPreference,
+                name: updatedBooking.driverId?.name || 'Self Drive',
+                licenseNumber: updatedBooking.customerLicenseNumber
             },
             billing: {
                 totalAmount: updatedBooking.totalBill,
@@ -579,9 +632,11 @@ router.patch("/:bookingId/cancel", auth, async (req, res) => {
         booking.cancelledBy = req.user.id;
 
         // Make driver available again
-        await Driver.findByIdAndUpdate(booking.driverId._id, { 
-            available: true 
-        });
+        if (booking.driverPreference === "driver"){
+            await Driver.findByIdAndUpdate(booking.driverId._id, { 
+                available: true 
+            });    
+        }
 
         await booking.save();
 
@@ -600,7 +655,7 @@ router.patch("/:bookingId/cancel", auth, async (req, res) => {
                     registrationNumber: booking.carId.registrationNumber
                 },
                 driver: {
-                    name: booking.driverId.name
+                    name: booking?.driverId?.name
                 },
                 cancellationDetails: {
                     reason: booking.cancellationReason,
@@ -696,9 +751,11 @@ router.patch("/:bookingId/end", auth, async (req, res) => {
         booking.completedBy = req.user.id;
 
         // Make driver available again
-        await Driver.findByIdAndUpdate(booking.driverId._id, { 
-            available: true 
-        });
+        if (booking.driverPreference === "driver"){
+            await Driver.findByIdAndUpdate(booking.driverId._id, { 
+                available: true 
+            });
+        }
 
         await booking.save();
 
@@ -712,7 +769,7 @@ router.patch("/:bookingId/end", auth, async (req, res) => {
                     registrationNumber: booking.carId.registrationNumber
                 },
                 driver: {
-                    name: booking.driverId.name
+                    name: booking?.driverId?.name || "Self"
                 },
                 customer: {
                     name: booking.customerId.fullName,

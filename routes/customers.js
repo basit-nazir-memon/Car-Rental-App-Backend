@@ -44,11 +44,13 @@ router.get("/search", auth, async (req, res) => {
 // Add a new customer
 router.post("/", auth, async (req, res) => {
     try {
-        const { fullName, phoneNumber, idCardNumber } = req.body;
+        const { fullName, careOf, phoneNumber, idCardNumber, email, address } = req.body;
 
         // Validate required fields
-        if (!fullName || !phoneNumber || !idCardNumber) {
-            return res.status(400).json({ error: "All fields are required" });
+        if (!fullName || !careOf || !phoneNumber || !idCardNumber) {
+            return res.status(400).json({ 
+                error: "All fields (fullName, careOf, phoneNumber, idCardNumber) are required" 
+            });
         }
 
         // Check if customer already exists with same phone or ID card
@@ -68,8 +70,11 @@ router.post("/", auth, async (req, res) => {
         // Create new customer
         const newCustomer = new Customer({
             fullName,
+            careOf,
             phoneNumber,
-            idCardNumber
+            idCardNumber,
+            email,
+            address
         });
 
         await newCustomer.save();
@@ -122,6 +127,7 @@ router.get("/:customerId/details", auth, async (req, res) => {
         const customerData = {
             id: customer._id,
             name: customer.fullName,
+            careOf: customer.careOf,
             phone: customer.phoneNumber,
             idCard: customer.idCardNumber,
             email: customer.email || "",
@@ -196,7 +202,7 @@ router.get("/:customerId/details", auth, async (req, res) => {
 router.patch("/:customerId", auth, async (req, res) => {
     try {
         const { customerId } = req.params;
-        const { fullName, phoneNumber, idCardNumber, email, address } = req.body;
+        const { fullName, careOf, phoneNumber, idCardNumber, email, address } = req.body;
 
         // Find customer
         const customer = await Customer.findById(customerId);
@@ -223,6 +229,7 @@ router.patch("/:customerId", auth, async (req, res) => {
 
         // Update other fields
         if (fullName) customer.fullName = fullName;
+        if (careOf) customer.careOf = careOf;
         if (email) customer.email = email;
         if (address) customer.address = address;
 
@@ -233,6 +240,7 @@ router.patch("/:customerId", auth, async (req, res) => {
             customer: {
                 id: customer._id,
                 name: customer.fullName,
+                careOf: customer.careOf,
                 phone: customer.phoneNumber,
                 idCard: customer.idCardNumber,
                 email: customer.email,

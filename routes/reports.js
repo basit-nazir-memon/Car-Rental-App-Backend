@@ -103,19 +103,13 @@ router.get("/monthly", auth, async (req, res) => {
                 carModel: booking.carId.model,
                 registrationNumber: booking.carId.registrationNumber,
                 customerName: booking.customerId.fullName,
-                driverName: booking.driverId.name,
+                driverName: booking?.driverId?.name || "Self",
                 startDate: booking.startDate,
                 endDate: booking.endDate,
                 totalAmount: booking.totalBill * (100 - (booking.discountPercentage || 0)) / 100,
                 status: booking.status
             })),
             revenueReportData: [
-                {
-                    month: months[monthIndex - 2]?.charAt(0).toUpperCase() + months[monthIndex - 2]?.slice(1) || "",
-                    revenue: prevMonthStats.totalRevenue,
-                    expenses: prevMonthStats.totalExpenses,
-                    profit: prevMonthStats.totalRevenue - prevMonthStats.totalExpenses
-                },
                 {
                     month: months[monthIndex - 1]?.charAt(0).toUpperCase() + months[monthIndex - 1]?.slice(1) || "",
                     revenue: prevMonthStats.totalRevenue,

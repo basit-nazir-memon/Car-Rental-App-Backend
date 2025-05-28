@@ -3,6 +3,9 @@ const router = express.Router();
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const auth = require("../middleware/auth");
+const Car = require("../models/Car");
+const Booking = require("../models/Booking");
+const Expense = require("../models/Expense");
 
 // Add new stakeholder
 router.post("/", auth, async (req, res) => {
@@ -109,6 +112,130 @@ router.get("/", auth, async (req, res) => {
     } catch (error) {
         console.error("Error fetching stakeholders:", error);
         res.status(500).json({ error: "Failed to fetch stakeholders" });
+    }
+});
+
+// Get detailed stakeholder information
+router.get("/details/:id", auth, async (req, res) => {
+    try {
+        // Get stakeholder details
+        const stakeholder = await User.findById(req.params.id)
+            .select('-password');
+
+        if (!stakeholder) {
+            return res.status(404).json({ error: "Stakeholder not found" });
+        }
+
+        // Get all cars owned by the stakeholder
+        const cars = await Car.find({ user: stakeholder._id });
+
+        // Get all bookings for these cars
+        const carIds = cars.map(car => car._id);
+        const bookings = await Booking.find({
+            carId: { $in: carIds }
+        }).populate('carId', 'model registrationNumber');
+
+        // Get all expenses for these cars
+        const expenses = await Expense.find({
+            carId: { $in: carIds }
+        });
+
+        // Calculate financial metrics for each car
+        const carsWithStats = await Promise.all(cars.map(async car => {
+            const carBookings = bookings.filter(booking => 
+                booking.carId._id.toString() === car._id.toString()
+            );
+
+            const completedBookings = carBookings.filter(booking => 
+                booking.status === 'completed'
+            );
+
+            const totalRevenue = completedBookings.reduce((sum, booking) =>
+                sum + (booking.totalBill * (100 - (booking.discountPercentage || 0)) / 100), 0
+            );
+
+            const carExpenses = expenses.filter(expense =>
+                expense.carId.toString() === car._id.toString()
+            );
+
+            const totalExpenses = carExpenses.reduce((sum, expense) => 
+                sum + expense.amount, 0
+            );
+
+            const commissionAmount = (totalRevenue * stakeholder.commissionPercentage) / 100;
+            const totalProfit = totalRevenue - commissionAmount - totalExpenses;
+
+            return {
+                id: car._id,
+                model: car.model,
+                year: car.year,
+                color: car.color,
+                variant: car.variant,
+                registrationNumber: car.registrationNumber,
+                image: car.image || "/placeholder.svg?height=200&width=300",
+                stats: {
+                    totalBookings: carBookings.length,
+                    completedBookings: completedBookings.length,
+                    totalRevenue,
+                    totalExpenses,
+                    commissionAmount,
+                    totalProfit
+                }
+            };
+        }));
+
+        // Calculate overall statistics
+        const totalRevenue = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.totalRevenue, 0
+        );
+
+        const totalExpenses = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.totalExpenses, 0
+        );
+
+        const totalCommission = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.commissionAmount, 0
+        );
+
+        const totalProfit = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.totalProfit, 0
+        );
+
+        const totalBookings = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.totalBookings, 0
+        );
+
+        const completedBookings = carsWithStats.reduce((sum, car) => 
+            sum + car.stats.completedBookings, 0
+        );
+
+        // Format response
+        const response = {
+            stakeholder: {
+                id: stakeholder._id,
+                name: stakeholder.name,
+                email: stakeholder.email,
+                phone: stakeholder.phone,
+                commissionPercentage: stakeholder.commissionPercentage,
+                avatar: stakeholder.avatar
+            },
+            overview: {
+                totalCars: cars.length,
+                totalBookings,
+                completedBookings,
+                totalRevenue,
+                totalExpenses,
+                totalCommission,
+                totalProfit
+            },
+            cars: carsWithStats
+        };
+
+        res.json(response);
+
+    } catch (error) {
+        console.error("Error fetching stakeholder details:", error);
+        res.status(500).json({ error: "Failed to fetch stakeholder details" });
     }
 });
 

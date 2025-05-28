@@ -10,6 +10,7 @@ const driverSchema = new Schema({
     idNumber: { type: String, required: true },
     address: { type: String, required: true },
     lisenceNumber: {type: String, required: true},
+    emergencyPhone: { type: String},
     resetPasswordToken: String,
     resetPasswordExpires: Date,
 });

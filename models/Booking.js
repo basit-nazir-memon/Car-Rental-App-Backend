@@ -20,12 +20,38 @@ const BookingSchema = new Schema(
         driverId: { 
             type: mongoose.Schema.Types.ObjectId, 
             ref: "Driver",
-            required: true 
+            required: function() {
+                return this.driverPreference === 'driver';
+            }
         },
         tripType: { 
             type: String, 
             enum: ['withincity', 'outofcity'],
             required: true 
+        },
+        tripStartTime: {
+            type: String,
+            required: true,
+            validate: {
+                validator: function(value) {
+                    return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(value);
+                },
+                message: 'Trip start time must be in HH:mm format'
+            }
+        },
+        tripDescription: {
+            type: String,
+            trim: true,
+            maxLength: [500, 'Trip description cannot exceed 500 characters']
+        },
+        driverPreference: {
+            type: String,
+            enum: ['driver', 'self'],
+            required: true
+        },
+        customerLicenseNumber: {
+            type: String,
+            trim: true,
         },
         cityName: { 
             type: String,
@@ -38,12 +64,6 @@ const BookingSchema = new Schema(
         startDate: {
             type: Date,
             required: true,
-            validate: {
-                validator: function(value) {
-                    return value >= new Date();
-                },
-                message: 'Start date cannot be in the past'
-            }
         },
         endDate: {
             type: Date,
