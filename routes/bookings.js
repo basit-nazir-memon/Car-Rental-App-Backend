@@ -302,6 +302,57 @@ router.get("/status/:status", auth, async (req, res) => {
     }
 });
 
+
+// Get all active bookings for the authenticated user
+router.get("/active", auth, async (req, res) => {
+    try {
+        // Find bookings with status 'active' for the current user
+        const bookings = await Booking.find({ status: 'active', bookedBy: req.user.id })
+            .populate({
+                path: 'carId',
+                select: 'model year registrationNumber'
+            })
+            .populate({
+                path: 'driverId',
+                select: 'name'
+            })
+            .populate({
+                path: 'customerId',
+                select: 'fullName idCardNumber'
+            })
+            .sort({ createdAt: -1 });
+
+        const formattedBookings = bookings.map(booking => ({
+            id: booking._id,
+            carModel: booking.carId.model,
+            carYear: booking.carId.year,
+            registrationNumber: booking.carId.registrationNumber,
+            customerName: booking.customerId.fullName,
+            customerIdCard: booking.customerId.idCardNumber,
+            driverName: booking.driverId?.name || 'Self Drive',
+            startDate: booking.startDate,
+            endDate: booking.endDate,
+            status: booking.status,
+            tripType: booking.tripType,
+            cityName: booking.cityName,
+            totalBill: booking.totalBill,
+            advancePaid: booking.advancePaid,
+            remainingAmount: booking.totalBill - booking.advancePaid,
+            discountPercentage: booking.discountPercentage,
+            meterReading: booking.meterReading,
+            tripStartTime: booking.tripStartTime,
+            tripDescription: booking.tripDescription,
+            driverPreference: booking.driverPreference,
+            customerLicenseNumber: booking.customerLicenseNumber
+        }));
+
+        res.json({ bookings: formattedBookings });
+    } catch (error) {
+        console.error("Error fetching active bookings:", error);
+        res.status(500).json({ error: "Failed to fetch active bookings" });
+    }
+});
+
 // Get detailed booking information by ID
 router.get("/:bookingId/details", auth, async (req, res) => {
     try {
@@ -808,5 +859,6 @@ router.patch("/:bookingId/end", auth, async (req, res) => {
         res.status(500).json({ error: "Failed to end booking" });
     }
 });
+
 
 module.exports = router; 

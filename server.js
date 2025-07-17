@@ -30,7 +30,7 @@ app.use(express.json());
 
 app.use(cors());
 
-app.use('/', authRoute);
+app.use('/auth', authRoute);
 
 app.use('/cars', carsRoute);
 
